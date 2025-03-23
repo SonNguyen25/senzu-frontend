@@ -15,10 +15,14 @@ function FollowingList() {
         try {
             const response = await followClient.findFollowsByUserId(sessionProfile);
             console.log("Follows response:", response);
-            const followingIds = response.followings;
+            
+            const followDoc = response[0];
+            const followingIds = followDoc.followings;
+            console.log("Following IDs:", followingIds);
             const allUsers = await client.findAllUsers();
-            console.log("All users:", response.followings);
+            console.log("All users:", allUsers);
             const followingList = allUsers.filter((user: client.User) => followingIds.includes(user._id));
+            console.log("Following list:", followingList);
             setFollowers(followingList);
         } catch (error) {
             console.error("Failed to fetch follows:", error);

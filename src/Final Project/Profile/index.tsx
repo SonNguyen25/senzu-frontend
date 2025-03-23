@@ -20,6 +20,7 @@ function Profile() {
   const [sessionProfile, setSessionProfile] = useState<client.User>();
   const navigate = useNavigate();
   const { param } = useParams();
+  console.log("Route userId:", param);
   const [isEditing, setIsEditing] = useState(false);
   const [profilePic, setProfilePic] = useState("");
   const defaultProfilePicUrl = "../images/default.jpeg";
@@ -34,39 +35,51 @@ function Profile() {
 
   const handleIsFollowed = async () => {
     if (!followProfile || !sessionProfile) {
-        console.error("No follow profile available");
-        return; // Exit the function if no follow profile is loaded.
+      console.error("No follow profile available");
+      return;
     }
-
+    console.log("Current target follow document:", followProfile);
+  
+    // Update followers array for the target user's follow doc
     const updatedFollowers = isFollowed
-        ? followProfile.followers.filter(follower => follower !== sessionProfile?._id)
-        : [...(followProfile.followers || []), sessionProfile?._id];
-
+      ? followProfile.followers.filter(follower => follower !== sessionProfile._id)
+      : [...(followProfile.followers || []), sessionProfile._id];
+  
     try {
-      const filteredFollowers = updatedFollowers.filter((follower) => follower !== undefined).map((follower) => follower as string);
-      const updatedFollow: followClient.Follows = { ...followProfile, followers: filteredFollowers };
+      // Prepare updated follow document for the target user
+      const updatedFollow: followClient.Follows = {
+        ...followProfile,
+        followers: updatedFollowers
+      };
       await followClient.updateFollow(followProfile._id, updatedFollow);
-
-      const sessionProfileFollows = await followClient.findFollowsByUserId(sessionProfile._id); 
-      const updatedFollowing = isFollowed
-            ? sessionProfileFollows.followings.filter((following: string) => following !== followProfile.user)
-            : [...(sessionProfileFollows.followings || []), followProfile.user];
-
+  
+      // Now update the session user's follow document.
+      // Remember, findFollowsByUserId returns an array – get the first element.
+      const sessionFollowsArr = await followClient.findFollowsByUserId(sessionProfile._id);
+      if (sessionFollowsArr.length > 0) {
+        const sessionFollowDoc = sessionFollowsArr[0];
+        const updatedFollowing = isFollowed
+          ? sessionFollowDoc.followings.filter(
+              (following: string) => following !== followProfile.user
+            )
+          : [...(sessionFollowDoc.followings || []), followProfile.user];
         const updatedSessionFollowProfile: followClient.Follows = {
-            ...sessionProfileFollows,
-            followings: updatedFollowing
+          ...sessionFollowDoc,
+          followings: updatedFollowing
         };
-        console.log("CHECK", updatedSessionFollowProfile);
         await followClient.updateFollow(updatedSessionFollowProfile._id, updatedSessionFollowProfile);
-
+      } else {
+        console.warn("No follow document found for the session user");
+      }
+  
+      // Update local state
       setFollowProfile(updatedFollow);
       setIsFollowed(!isFollowed);
-      fetchFollows(); 
+      fetchFollows();
     } catch (error) {
       console.error("Failed to update follow status:", error);
-      
     }
-};
+  };
 
   const handleIsEditing = async () => {
     setIsEditing(false);
@@ -101,9 +114,12 @@ function Profile() {
   async function fetchFollows() {
     try {
       const response = await followClient.findFollowsByUserId(param as string);
-        setFollowProfile(response);
-        setFollowerCount(response.followers.length === null ? 0 : response.followers.length);
-        setIsFollowed(response.followers.includes(sessionProfile?._id));
+        const followData = response[0];
+        setFollowProfile(followData);
+        // console.log("Follows response:", followData);
+        setFollowerCount(followData.followers.length === null ? 0 : followData.followers.length);
+        setIsFollowed(followData.followers.includes(sessionProfile?._id));
+        // console.log("isFollowed", sessionProfile?._id, followData.followers.includes(sessionProfile?._id));
     } catch (error) {
       console.error("Failed to fetch follows:", error);
     }
@@ -137,6 +153,13 @@ function Profile() {
       console.error("Failed to fetch profile:", error);
     }
   }
+
+  useEffect(() => {
+    if (sessionProfile && followProfile) {
+      setIsFollowed(followProfile.followers.includes(sessionProfile._id));
+    }
+  }, [sessionProfile, followProfile]);
+
   useEffect(() => {
     fetchProfile();
     fetchFollows();
@@ -279,14 +302,13 @@ function Profile() {
                 <span className="dob">Born on {profile.dob}</span> <br />
                 <span className="experience">
                   {profile.yearsOfExperience} years grinding at the gym
-                </span>
-                <div className="follower-info">
-                  <button
-                    onClick={() => handleIsFollowed()}
-                    className="follow-button post-button"
-                  >
-                    {isFollowed ? "Unfollow" : "Follow"}
-                  </button>
+                  </span>
+                  <div className="follower-info">
+                  {sessionProfile && sessionProfile._id !== profile._id && (
+                      <button onClick={handleIsFollowed} className="follow-button post-button">
+                        {isFollowed ? "Unfollow" : "Follow"}
+                      </button>
+                    )}
                   {sessionProfile &&
                     (sessionProfile._id === profile._id ||
                       sessionProfile.role === "ADMIN") && (
@@ -298,7 +320,7 @@ function Profile() {
                       </button>
                     )}
                   <span className="follower-count">
-                    {followerCount} Followers
+                    {followerCount} {followerCount === 1 ? "Follower" : "Followers"}
                   </span>
                 </div>
               </div>

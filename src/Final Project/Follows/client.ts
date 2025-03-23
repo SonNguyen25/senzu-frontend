@@ -37,8 +37,11 @@ export const updateFollow = async (followId: string, follows: Follows) => {
 };
 export const findFollowsByUserId = async (userId: string) => {
     try {
-        const response = await api.get(`${FOLLOWS_API}/user/${userId}`);
-        return response.data;
+      const fullUrl = `${FOLLOWS_API}/user/${userId}`;
+      console.log("Requesting follows from URL:", fullUrl);
+      const response = await api.get(fullUrl);
+      console.log("Response received:", response.data);
+      return response.data;
     } catch (error) {
         console.error('Failed to load follows:', error);
         return [];
